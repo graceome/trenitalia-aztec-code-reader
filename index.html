@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="grace">
+
+  <title>Trenitalia Aztec Code Reader</title>
+
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null" href="css/roboto.css">
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null" href="css/normalize.css">
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null" href="css/milligram.min.css">
+</head>
+
+<body>
+
+  <main class="wrapper" style="padding-top:2em">
+
+    <section class="container" id="aztecDetails">
+      <h1 class="title">Trenitalia Aztec Code Reader</h1>
+
+      <p>This is an attempt to reverse engineer the content of AZTEC codes printed on Trenitalia tickets.
+      The size of the binary code has evolved over the years. It used to be 440 bit long before 2012(?) and is now 536 bits.
+      The current database of tickets is too small to understand what most of the descriptors are (their value is always the same)
+      but it is rather clear that no cryptographic signatures or integrity checks are present.
+      The database of known station names is also quite small (shown below).
+      The position and size of the known fields (about half of the 536 bits) and their meaning is presented in the table below.
+      Notably the <b>year</b> field is missing so the conversion from day of the year to date must be done by hand.
+      If you have questions or you want to contribute to this project contact gracemomo@pm.me or open an issue on github.
+      </p>
+      <p>This page also includes an interactive parser based on a slightly modified version of zxing-js (see footer). Everything is computed locally inside your browser and not data is shared.</p>
+
+      <div>
+        <a class="button" id="startButton">Start</a>
+        <a class="button" id="resetButton">Reset</a>
+      </div>
+
+      <div>
+        <video id="video" width="300" height="200" style="border: 1px solid gray"></video>
+      </div>
+
+      <div id="sourceSelectPanel" style="display:none">
+        <label for="sourceSelect">Change video source:</label>
+        <select id="sourceSelect" style="max-width:400px">
+        </select>
+      </div>
+
+      <label>Result:</label>
+      <blockquote>
+        <p id="bits" name='result' style="word-break: break-all;"></p>
+      </blockquote>
+      <table>
+      <thead>
+          <tr>
+          <th>Field</th>
+          <th>Location (bits interval)</th>
+          <th>Value</th>
+          <th>Comment</th>
+          </tr>
+      </thead>
+      <tbody>
+          <tr>
+          <td>Issue Day of Year</td>
+          <td id='issueDayBits'>43 (9)</td>
+          <td id='issueDay' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Travel Day of Year</td>
+          <td id='travelDayBits' >52 (9)</td>
+          <td id='travelDay' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>FrecciaID</td>
+          <td id='frecciaIDBits'>77 (32)</td>
+          <td id='frecciaID' name='result'></td>
+          <td>[maybe longer and starting at 61?]</td>
+          </tr>
+          <tr>
+          <td>Departure Station</td>
+          <td id='departureStationBits'>109 (31)</td>
+          <td id='departureStation' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Arrival Station</td>
+          <td id='arrivalStationBits'>140 (31)</td>
+          <td id='arrivalStation' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Train Number</td>
+          <td id='trainNumberBits'>178 (16)</td>
+          <td id='trainNumber' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Coach Number</td>
+          <td id='coachNumberBits'>246 (4)</td>
+          <td id='coachNumber' name='result'></td>
+          <td>This is sometime wrong and the number is at 242</td>
+          </tr>
+          <tr>
+          <td>Seat Number</td>
+          <td id='seatNumberBits'>250 (7)</td>
+          <td id='seatNumber' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Seat Letter</td>
+          <td id='seatLetterBits'>257 (6)</td>
+          <td id='seatLetter' name='result'></td>
+          <td>Convert to hexadecimal number to get letter</td>
+          </tr>
+          <tr>
+          <td>Ticket Number</td>
+          <td id='ticketNumberBits'>468 (32)</td>
+          <td id='ticketNumber' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Distributor ID 1</td>
+          <td id='distributor1Bits'>501 (16)</td>
+          <td id='distributor1' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Distributor ID 2</td>
+          <td id='distributor2Bits'>517 (10)</td>
+          <td id='distributor2' name='result'></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>Distribution Day of Year</td>
+          <td id='distributionDayBits'>527 (9)</td>
+          <td id='distributionDay' name='result'></td>
+          <td></td>
+          </tr>
+      </tbody>
+      </table>
+
+    <label>Stations:</label>
+    <pre>{
+  "1082050233": "Roma Termini",
+  "1082044413": "Venezia Mestre",
+  "1082050236": "Fiumicino Aeroporto",
+  "1082043524": "Milano Centrale",
+  "1082046867": "Bologna Centrale",
+  "1082046524": "Genova P.za Principe",
+  "1082046542": "S. Margherita L.-P",
+  "1082047530": "Rovigo",
+  "1082054715": "Cagliari",
+  "1082054643": "Elmas Aeroporto",
+}</pre>
+
+    <label>Code:</label>
+      <p>See the <a href="https://github.com/">source code</a> of
+        this parser (heavily based on the <a href="https://github.com/zxing-js/library/tree/master/docs/examples/qr-camera/">zxing-js example</a> and using a version of <code>aztec/decoder/Decoder.ts</code> without <code>castAsNonUtf8Char</code>, <a target="_blank" href="decoder.patch">patch here</a>).</p>
+    </section>
+
+    <footer class="footer">
+      <section class="container">
+        <p>Trenitalia Aztec Code Reader released under <a target="_blank"
+            href="http://www.wtfpl.net/txt/copying/" title="WTFPL">WTFPL License</a>.</p>
+      </section>
+    </footer>
+
+  </main>
+
+
+  <!-- Patched <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script> -->
+  <script type="text/javascript" src="index.min.js"></script>
+
+  <!--Currently known fields, reported as [position, length] in bits-->
+  <script type="application/json" id="ticketFields">
+{"issueDay": [43, 9], "travelDay": [52, 9], "frecciaID": [77, 32], "departureStation": [109, 31], "arrivalStation": [140, 31], "trainNumber": [178, 16], "ticketNumber": [468, 32], "distributor1": [501, 16], "distributor2": [517, 10], "distributionDay": [527, 9], "coachNumber": [246, 4], "seatNumber": [250, 7], "seatLetter": [257, 6]}
+  </script>
+
+  <script type="text/javascript">
+
+    // convert to binary code for processing
+    function text2Binary(string) {
+      return string.split('').map(function (char) {
+        return char.charCodeAt(0).toString(2).padStart(8, "0");
+      }).join('');
+    };
+
+    var ticketFields = JSON.parse(document.getElementById('ticketFields').innerHTML);
+
+    window.addEventListener('load', function () {
+    
+      // compile table with known info
+      Object.keys(ticketFields).forEach(function(key) {
+        const info = ticketFields[key][0].toString() + ' (' + ticketFields[key][1].toString() + ')';
+        document.getElementById(key + 'Bits').textContent = info;
+      })
+        
+      let selectedDeviceId;
+      const codeReader = new ZXing.BrowserAztecCodeReader();
+      console.log('ZXing code reader initialized')
+      
+      codeReader.getVideoInputDevices()
+        .then((videoInputDevices) => {
+          const sourceSelect = document.getElementById('sourceSelect')
+          selectedDeviceId = videoInputDevices[0].deviceId
+          if (videoInputDevices.length >= 1) {
+            videoInputDevices.forEach((element) => {
+              const sourceOption = document.createElement('option')
+              sourceOption.text = element.label
+              sourceOption.value = element.deviceId
+              sourceSelect.appendChild(sourceOption)
+            })
+
+            sourceSelect.onchange = () => {
+              selectedDeviceId = sourceSelect.value;
+            };
+
+            const sourceSelectPanel = document.getElementById('sourceSelectPanel')
+            sourceSelectPanel.style.display = 'block'
+          }
+
+          document.getElementById('startButton').addEventListener('click', () => {
+            codeReader.decodeFromInputVideoDevice(selectedDeviceId, 'video').then((result) => {
+              console.log(result)
+              codeReader.reset()
+
+              const ticketBits = text2Binary(result.text);
+              
+              document.getElementById('bits').textContent = ticketBits;
+
+              Object.keys(ticketFields).forEach(function(key) {
+                const from = ticketFields[key][0];
+                const to = from + ticketFields[key][1];
+                document.getElementById(key).textContent = parseInt(ticketBits.substring(from, to), 2);
+              })
+              
+            }).catch((err) => {
+              console.error(err)
+              document.getElementById('bits').textContent = err
+            })
+            console.log(`Started continous decode from camera with id ${selectedDeviceId}`)
+          })
+
+          document.getElementById('resetButton').addEventListener('click', () => {
+            codeReader.reset()
+
+            var TextElements = document.getElementsByName("result");
+
+            for (var i = 0, max = TextElements.length; i < max; i++) {
+                TextElements[i].textContent = "";
+            }
+            console.log('Reset.')
+          })
+
+        })
+        .catch((err) => {
+          console.error(err)
+        })
+    })
+  </script>
+
+</body>
+
+</html>
+
+
+
+
+

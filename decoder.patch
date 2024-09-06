@@ -1,0 +1,13 @@
+diff --git a/src/core/aztec/decoder/Decoder.ts b/src/core/aztec/decoder/Decoder.ts
+index a8c229d..93d1370 100644
+--- a/src/core/aztec/decoder/Decoder.ts
++++ b/src/core/aztec/decoder/Decoder.ts
+@@ -120,7 +120,7 @@ export default class Decoder {
+                         break;
+                     }
+                     const code: int = Decoder.readCode(correctedBits, index, 8);
+-                    result += /*(char)*/ StringUtils.castAsNonUtf8Char(code);
++                    result += /*(char)*/ String.fromCharCode(code); // StringUtils.castAsNonUtf8Char(code);
+                     index += 8;
+                 }
+                 // Go back to whatever mode we had been in
